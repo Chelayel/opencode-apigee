@@ -34,8 +34,11 @@ support.
 **2. Store the client secret** in OpenCode's credential store:
 
 ```bash
-opencode auth login      # pick "apigee", paste the client secret
+opencode auth login
 ```
+
+Pick **Gemini via Apigee** from the list (type "apigee" to filter) and paste
+the client secret where it asks for an API key.
 
 (or set `APIGEE_CLIENT_SECRET` in the environment).
 

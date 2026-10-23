@@ -1,6 +1,6 @@
 {
   "name": "opencode-apigee",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenCode provider plugin: Gemini on Vertex AI behind an Apigee gateway (OAuth client credentials).",
   "type": "module",
   "main": "./dist/index.js",

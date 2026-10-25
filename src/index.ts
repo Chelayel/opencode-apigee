@@ -44,7 +44,7 @@ export const ApigeePlugin: Plugin = async (_input, rawOptions) => {
         // A model the user described in opencode.json keeps their description.
         models: { ...models, ...(existing.models ?? {}) },
         options: {
-          ...(settings.gateway && settings.project ? { baseURL: baseUrl(settings) } : {}),
+          ...(settings.baseUrl || (settings.gateway && settings.project) ? { baseURL: baseUrl(settings) } : {}),
           ...(existing.options ?? {}),
         },
       }

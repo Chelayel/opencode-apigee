@@ -13,6 +13,14 @@ export interface ApigeeSettings {
   clientSecret: string
   /** Model ids the gateway publishes. */
   models: string[]
+  /** Vertex API version in the path (default `v1`). */
+  apiVersion: string
+  /**
+   * The whole base URL — everything before `/models/<id>:…` — used instead of the
+   * standard path, for a gateway that does not mount Vertex the standard way.
+   * May use `{project}`, `{location}` and `{version}`.
+   */
+  baseUrl: string
 }
 
 /** Plugin options, as written in opencode.json: `["opencode-apigee", { ... }]`. */
@@ -24,6 +32,10 @@ export interface ApigeeOptions {
   clientId?: string
   clientSecret?: string
   models?: string[] | string
+  /** Vertex API version in the path, e.g. `v1beta1` (default `v1`). */
+  apiVersion?: string
+  /** Full base URL up to `/models`, replacing the standard path; may use `{project}`, `{location}`, `{version}`. */
+  baseUrl?: string
   /** Provider id in OpenCode (default `apigee`). */
   providerId?: string
   /** Display name in OpenCode (default `Gemini via Apigee`). */
@@ -56,10 +68,14 @@ export function resolveSettings(
     clientId: pick(options.clientId, "APIGEE_CLIENT_ID", "apigee.client.id") ?? "",
     clientSecret: nonBlank(storedSecret) ?? pick(options.clientSecret, "APIGEE_CLIENT_SECRET", "apigee.client.secret") ?? "",
     models,
+    apiVersion: pick(options.apiVersion, "APIGEE_API_VERSION", "vertex.api.version")?.replace(/^\/+|\/+$/g, "") ?? "v1",
+    baseUrl: pick(options.baseUrl, "APIGEE_BASE_URL", "vertex.base.url") ?? "",
   }
   const missing: string[] = []
-  if (!settings.gateway) missing.push("gateway (APIGEE_GATEWAY)")
-  if (!settings.project) missing.push("project (APIGEE_PROJECT)")
+  // With a full base URL, the gateway and project are only needed where it names them.
+  const needs = (part: string) => !settings.baseUrl || settings.baseUrl.includes(`{${part}}`)
+  if (!settings.baseUrl && !settings.gateway) missing.push("gateway (APIGEE_GATEWAY) or baseUrl (APIGEE_BASE_URL)")
+  if (needs("project") && !settings.project) missing.push("project (APIGEE_PROJECT)")
   if (!settings.tokenUrl) missing.push("tokenUrl (APIGEE_TOKEN_URL)")
   if (!settings.clientId) missing.push("clientId (APIGEE_CLIENT_ID)")
   if (!settings.clientSecret) missing.push("client secret (`opencode auth login` → Apigee, or APIGEE_CLIENT_SECRET)")
@@ -69,10 +85,20 @@ export function resolveSettings(
 /**
  * The Vertex publisher path on the gateway. `@ai-sdk/google` appends
  * `/models/<id>:streamGenerateContent`, which together is Vertex's own URL.
+ * Gateways differ in version and in where they mount Vertex, so neither is
+ * fixed: `apiVersion` changes the one, `baseUrl` replaces the whole path.
  */
 export function baseUrl(s: ApigeeSettings): string {
+  const fill = (t: string) => t
+    .replaceAll("{project}", encodeURIComponent(s.project))
+    .replaceAll("{location}", encodeURIComponent(s.location))
+    .replaceAll("{version}", s.apiVersion)
+  if (s.baseUrl) {
+    const url = fill(s.baseUrl)
+    return (/^https?:\/\//i.test(url) ? url : `https://${url}`).replace(/\/+$/, "")
+  }
   const gateway = /^https?:\/\//i.test(s.gateway) ? s.gateway : `https://${s.gateway}`
-  return `${gateway.replace(/\/+$/, "")}/v1/projects/${encodeURIComponent(s.project)}/locations/${encodeURIComponent(s.location)}/publishers/google`
+  return `${gateway.replace(/\/+$/, "")}/${s.apiVersion}/projects/${encodeURIComponent(s.project)}/locations/${encodeURIComponent(s.location)}/publishers/google`
 }
 
 /** AI Relay's config file, or nothing. Its path follows AIRELAY_CONFIG like AI Relay itself. */

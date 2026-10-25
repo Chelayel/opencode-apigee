@@ -44,9 +44,25 @@ describe("settings", () => {
   })
 
   test("the base URL is the Vertex publisher path on the gateway", () => {
-    const s = { gateway: "my-gw.example.com", project: "p 1", location: "europe-west4", tokenUrl: "", clientId: "", clientSecret: "", models: [] }
+    const s = { gateway: "my-gw.example.com", project: "p 1", location: "europe-west4", tokenUrl: "", clientId: "", clientSecret: "", models: [], apiVersion: "v1", baseUrl: "" }
     expect(baseUrl(s)).toBe("https://my-gw.example.com/v1/projects/p%201/locations/europe-west4/publishers/google")
     expect(baseUrl({ ...s, gateway: "http://localhost:8080/" })).toBe("http://localhost:8080/v1/projects/p%201/locations/europe-west4/publishers/google")
+  })
+
+  test("the API version is configurable, and a full base URL replaces the path", () => {
+    const s = { gateway: "gw", project: "p", location: "l", tokenUrl: "", clientId: "", clientSecret: "", models: [], apiVersion: "v1beta1", baseUrl: "" }
+    expect(baseUrl(s)).toBe("https://gw/v1beta1/projects/p/locations/l/publishers/google")
+    expect(baseUrl({ ...s, baseUrl: "https://gw.example.com/genai/vertex/" })).toBe("https://gw.example.com/genai/vertex")
+    expect(baseUrl({ ...s, baseUrl: "gw.example.com/ai/{version}/projects/{project}/locations/{location}/publishers/google" }))
+      .toBe("https://gw.example.com/ai/v1beta1/projects/p/locations/l/publishers/google")
+  })
+
+  test("with a base URL, gateway and project are needed only where it names them", () => {
+    const base = { tokenUrl: "https://a/t", clientId: "i" }
+    expect(resolveSettings({ ...base, baseUrl: "https://gw/genai" }, {}, "s", {}).missing).toEqual([])
+    expect(resolveSettings({ ...base, baseUrl: "https://gw/{project}" }, {}, "s", {}).missing.join()).toContain("project")
+    expect(resolveSettings({ ...base, apiVersion: "/v1beta1/" }, {}, "s", {}).settings.apiVersion).toBe("v1beta1")
+    expect(resolveSettings(base, { APIGEE_BASE_URL: "https://env/x" }, "s", {}).settings.baseUrl).toBe("https://env/x")
   })
 
   test("display names", () => {

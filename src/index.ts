@@ -68,7 +68,10 @@ export const ApigeePlugin: Plugin = async (_input, rawOptions) => {
           baseURL: baseUrl(settings),
           // Required by @ai-sdk/google and never sent: the fetch replaces it with the token.
           apiKey: "apigee",
-          fetch: createApigeeFetch(tokens),
+          // The setting goes as a string: index imports nothing beyond what 0.2.0 did, because
+          // importing threat.js here stopped `opencode run` at start-up (1.19.4) while the
+          // same module imported from token.js loads fine.
+          fetch: createApigeeFetch(tokens, undefined, settings.encodeText),
         }
       },
     },

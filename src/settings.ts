@@ -15,6 +15,8 @@ export interface ApigeeSettings {
   models: string[]
   /** Vertex API version in the path (default `v1`). */
   apiVersion: string
+  /** `auto` (re-send a request threat protection refused, encoded), `always` or `never`. */
+  encodeText: string
   /**
    * The whole base URL — everything before `/models/<id>:…` — used instead of the
    * standard path, for a gateway that does not mount Vertex the standard way.
@@ -36,6 +38,8 @@ export interface ApigeeOptions {
   apiVersion?: string
   /** Full base URL up to `/models`, replacing the standard path; may use `{project}`, `{location}`, `{version}`. */
   baseUrl?: string
+  /** Threat protection: `auto` (default) re-sends a refused request with text as base64 documents; `always`; `never`. */
+  encodeText?: string
   /** Provider id in OpenCode (default `apigee`). */
   providerId?: string
   /** Display name in OpenCode (default `Gemini via Apigee`). */
@@ -70,6 +74,7 @@ export function resolveSettings(
     models,
     apiVersion: pick(options.apiVersion, "APIGEE_API_VERSION", "vertex.api.version")?.replace(/^\/+|\/+$/g, "") ?? "v1",
     baseUrl: pick(options.baseUrl, "APIGEE_BASE_URL", "vertex.base.url") ?? "",
+    encodeText: pick(options.encodeText, "APIGEE_ENCODE_TEXT", "apigee.encode.text") ?? "auto",
   }
   const missing: string[] = []
   // With a full base URL, the gateway and project are only needed where it names them.

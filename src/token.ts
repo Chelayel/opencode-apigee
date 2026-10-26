@@ -1,3 +1,5 @@
+import { detectThreat, encodeBody, encodeMode, threatMessage, type EncodeMode } from "./threat.js"
+
 /**
  * The Apigee OAuth token: client credentials, sent the way AI Relay sends them
  * (`grant_type=client_credentials` on the token URL, HTTP Basic with the client
@@ -53,18 +55,47 @@ export function createTokenSource(
  * stale early (rotated, revoked): it is fetched again and the request retried
  * once.
  */
-export function createApigeeFetch(tokens: TokenSource, baseFetch: typeof fetch = fetch): typeof fetch {
+export function createApigeeFetch(tokens: TokenSource, baseFetch: typeof fetch = fetch, encodeText: EncodeMode | string = "auto"): typeof fetch {
+  const mode = encodeMode(encodeText)
+  // Once an encoded request has got past threat protection, later ones go encoded at once.
+  let encodeFromStart = mode === "always"
+
   const send = async (input: Parameters<typeof fetch>[0], init: RequestInit | undefined) => {
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
     headers.delete("x-goog-api-key")
     headers.set("Authorization", `Bearer ${await tokens.token()}`)
     return baseFetch(input, { ...init, headers })
   }
-  const apigeeFetch = async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+  const once = async (input: Parameters<typeof fetch>[0], init: RequestInit | undefined) => {
     const res = await send(input, init)
     if (res.status !== 401) return res
     tokens.invalidate()
     return send(input, init)
   }
+
+  const apigeeFetch = async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const body = typeof init?.body === "string" && init.body.includes('"contents"') ? init.body : undefined
+    const encoded = () => ({ ...init, body: encodeBody(body!) })
+    const res = await once(input, body !== undefined && encodeFromStart ? encoded() : init)
+    if (body === undefined || (res.status !== 400 && res.status !== 403)) return res
+    const policy = detectThreat(res.status, await res.clone().text())
+    if (!policy) return res
+    if (mode !== "auto" || encodeFromStart) return threatError(res.status, threatMessage(policy, res.status, mode, encodeFromStart))
+    const retry = await once(input, encoded())
+    if (retry.ok) {
+      encodeFromStart = true
+      return retry
+    }
+    const again = detectThreat(retry.status, await retry.clone().text())
+    return again ? threatError(retry.status, threatMessage(again, retry.status, mode, true)) : retry
+  }
   return apigeeFetch as typeof fetch
+}
+
+/** An error in Google's shape, so the provider shows its message instead of the raw Apigee fault. */
+function threatError(status: number, message: string): Response {
+  return new Response(JSON.stringify({ error: { code: status, message, status: "PERMISSION_DENIED" } }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  })
 }
